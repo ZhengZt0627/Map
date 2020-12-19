@@ -16,6 +16,7 @@ import android.provider.Settings;
 import android.util.Log;
 
 import com.amap.api.maps.AMap;
+import com.amap.api.maps.LocationSource;
 import com.amap.api.maps.MapView;
 import com.amap.api.maps.model.BitmapDescriptorFactory;
 import com.amap.api.maps.model.MyLocationStyle;
@@ -24,7 +25,7 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity  {
     private MapView mapView;
     private AMap aMap;
     @Override
@@ -51,9 +52,30 @@ public class MainActivity extends AppCompatActivity {
 //aMap.getUiSettings().setMyLocationButtonEnabled(true);设置默认定位按钮是否显示，非必需设置。
 //        myLocationStyle.myLocationType(MyLocationStyle.LOCATION_TYPE_LOCATION_ROTATE_NO_CENTER);//连续定位、蓝点不会移动到地图中心点，定位点依照设备方向旋转，并且蓝点会跟随设备移动。
         myLocationStyle.showMyLocation(true);
+        myLocationStyle.myLocationType(MyLocationStyle.LOCATION_TYPE_LOCATION_ROTATE_NO_CENTER);//连续定位、蓝点不会移动到地图中心点，定位点依照设备方向旋转，并且蓝点会跟随设备移动。
+        //连续定位、且将视角移动到地图中心点，定位蓝点跟随设备移动。（默认1秒1次定位）
 
         myLocationStyle.interval(MyLocationStyle.LOCATION_TYPE_MAP_ROTATE);
+
+        myLocationStyle.anchor((float) 0.0,(float) 1.0);       //设置定位蓝点图标的锚点方法。
+        //MyLocationStyle strokeColor(int color);//设置定位蓝点精度圆圈的边框颜色的方法。
+        myLocationStyle.strokeColor(5);
+        //MyLocationStyle radiusFillColor(int color);//设置定位蓝点精度圆圈的填充颜色的方法。
+        myLocationStyle.radiusFillColor(5);
+        myLocationStyle.strokeWidth((float) 5.0);
+        aMap.setMyLocationStyle(myLocationStyle);
+
+        aMap.setMyLocationEnabled(true);
+
+        aMap.setOnMyLocationChangeListener(new AMap.OnMyLocationChangeListener() {
+            @Override
+            public void onMyLocationChange(Location location) {
+                Log.e("TAG", "onMyLocationChange: 实际的时间间隔  " + aMap.getMyLocationStyle().getInterval());
+
+            }
+        });
     }
+
     @Override
     protected void onDestroy() {
         super.onDestroy();
@@ -67,6 +89,7 @@ public class MainActivity extends AppCompatActivity {
         //在activity执行onPause时执行mMapView.onPause ()，暂停地图的绘制
         mapView.onPause();
     }
+
     @Override
     protected void onSaveInstanceState(Bundle outState) {
         super.onSaveInstanceState(outState);
@@ -77,7 +100,7 @@ public class MainActivity extends AppCompatActivity {
 
     public void onMyLocationChange(Location location) {
 
-        Log.e("TAG","定位精度："+location.getLatitude()+"--纬度："+location.getLongitude());
+        Log.e("TAG", "定位精度：" + location.getLatitude() + "--纬度：" + location.getLongitude());
 
     }
 
@@ -99,7 +122,7 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onResume() {
-        try{
+        try {
             super.onResume();
             mapView.onResume();
 
@@ -108,7 +131,7 @@ public class MainActivity extends AppCompatActivity {
                     checkPermissions(needPermissions);
                 }
             }
-        }catch(Throwable e){
+        } catch (Throwable e) {
             e.printStackTrace();
         }
     }
@@ -119,7 +142,7 @@ public class MainActivity extends AppCompatActivity {
      */
     @TargetApi(23)
     private void checkPermissions(String... permissions) {
-        try{
+        try {
             if (Build.VERSION.SDK_INT >= 23 && getApplicationInfo().targetSdkVersion >= 23) {
                 List<String> needRequestPermissonList = findDeniedPermissions(permissions);
                 if (null != needRequestPermissonList
@@ -134,7 +157,7 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
 
-        }catch(Throwable e){
+        } catch (Throwable e) {
             e.printStackTrace();
         }
     }
@@ -143,6 +166,7 @@ public class MainActivity extends AppCompatActivity {
     private boolean needCheckBackLocation = false;
     //如果设置了target > 28，需要增加这个权限，否则不会弹出"始终允许"这个选择框
     private static String BACK_LOCATION_PERMISSION = "android.permission.ACCESS_BACKGROUND_LOCATION";
+
     /**
      * 获取权限集中需要申请权限的列表
      *
@@ -152,13 +176,13 @@ public class MainActivity extends AppCompatActivity {
      */
     @TargetApi(23)
     private List<String> findDeniedPermissions(String[] permissions) {
-        try{
+        try {
             List<String> needRequestPermissonList = new ArrayList<String>();
             if (Build.VERSION.SDK_INT >= 23 && getApplicationInfo().targetSdkVersion >= 23) {
                 for (String perm : permissions) {
                     if (checkMySelfPermission(perm) != PackageManager.PERMISSION_GRANTED
                             || shouldShowMyRequestPermissionRationale(perm)) {
-                        if(!needCheckBackLocation
+                        if (!needCheckBackLocation
                                 && BACK_LOCATION_PERMISSION.equals(perm)) {
                             continue;
                         }
@@ -167,7 +191,7 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
             return needRequestPermissonList;
-        }catch(Throwable e){
+        } catch (Throwable e) {
             e.printStackTrace();
         }
         return null;
@@ -201,13 +225,13 @@ public class MainActivity extends AppCompatActivity {
      * @since 2.5.0
      */
     private boolean verifyPermissions(int[] grantResults) {
-        try{
+        try {
             for (int result : grantResults) {
                 if (result != PackageManager.PERMISSION_GRANTED) {
                     return false;
                 }
             }
-        }catch(Throwable e){
+        } catch (Throwable e) {
             e.printStackTrace();
         }
         return true;
@@ -216,7 +240,7 @@ public class MainActivity extends AppCompatActivity {
     @TargetApi(23)
     public void onRequestPermissionsResult(int requestCode,
                                            String[] permissions, int[] paramArrayOfInt) {
-        try{
+        try {
             if (Build.VERSION.SDK_INT >= 23) {
                 if (requestCode == PERMISSON_REQUESTCODE) {
                     if (!verifyPermissions(paramArrayOfInt)) {
@@ -225,7 +249,7 @@ public class MainActivity extends AppCompatActivity {
                     }
                 }
             }
-        }catch(Throwable e){
+        } catch (Throwable e) {
             e.printStackTrace();
         }
     }
@@ -236,7 +260,7 @@ public class MainActivity extends AppCompatActivity {
      * @since 2.5.0
      */
     private void showMissingPermissionDialog() {
-        try{
+        try {
             AlertDialog.Builder builder = new AlertDialog.Builder(this);
             builder.setTitle("提示");
             builder.setMessage("当前应用缺少必要权限。\\n\\n请点击\\\"设置\\\"-\\\"权限\\\"-打开所需权限");
@@ -246,7 +270,7 @@ public class MainActivity extends AppCompatActivity {
                     new DialogInterface.OnClickListener() {
                         @Override
                         public void onClick(DialogInterface dialog, int which) {
-                            try{
+                            try {
                                 finish();
                             } catch (Throwable e) {
                                 e.printStackTrace();
@@ -269,7 +293,7 @@ public class MainActivity extends AppCompatActivity {
             builder.setCancelable(false);
 
             builder.show();
-        }catch(Throwable e){
+        } catch (Throwable e) {
             e.printStackTrace();
         }
     }
@@ -280,7 +304,7 @@ public class MainActivity extends AppCompatActivity {
      * @since 2.5.0
      */
     private void startAppSettings() {
-        try{
+        try {
             Intent intent = new Intent(
                     Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
             intent.setData(Uri.parse("package:" + getPackageName()));
@@ -289,4 +313,5 @@ public class MainActivity extends AppCompatActivity {
             e.printStackTrace();
         }
     }
+
 }
