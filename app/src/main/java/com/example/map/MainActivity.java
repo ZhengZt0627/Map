@@ -1,8 +1,5 @@
 package com.example.map;
 
-import androidx.appcompat.app.AlertDialog;
-import androidx.appcompat.app.AppCompatActivity;
-
 import android.Manifest;
 import android.annotation.TargetApi;
 import android.content.DialogInterface;
@@ -14,66 +11,78 @@ import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.util.Log;
+import android.view.View;
+import android.widget.Button;
+import android.widget.EditText;
+
+import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.app.AppCompatActivity;
 
 import com.amap.api.maps.AMap;
-import com.amap.api.maps.LocationSource;
 import com.amap.api.maps.MapView;
-import com.amap.api.maps.model.BitmapDescriptorFactory;
+
 import com.amap.api.maps.model.MyLocationStyle;
+import com.amap.api.services.core.PoiItem;
+import com.amap.api.services.poisearch.PoiResult;
+import com.amap.api.services.poisearch.PoiSearch;
+import com.amap.api.services.route.BusRouteResult;
+import com.amap.api.services.route.DriveRouteResult;
+import com.amap.api.services.route.RideRouteResult;
+import com.amap.api.services.route.RouteSearch;
+import com.amap.api.services.route.WalkPath;
+import com.amap.api.services.route.WalkRouteResult;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 
-public class MainActivity extends AppCompatActivity  {
-    private MapView mapView;
+public class MainActivity extends AppCompatActivity implements PoiSearch.OnPoiSearchListener, RouteSearch.OnRouteSearchListener {
     private AMap aMap;
+    private EditText et;
+    private Button btn;
+    private String string;
+    private int currentPage = 0;
+    private MapView mapView;
+    private RouteSearch.FromAndTo fromAndTo;
+    private int  walkMode;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-
-        MapView mapView = (MapView) findViewById(R.id.map);
+        et = findViewById(R.id.et);
+        mapView = (MapView) findViewById(R.id.map);
         mapView.onCreate(savedInstanceState);// 此方法必须重写
         aMap = mapView.getMap();
         initMapD();
+        initView();
+        initWork();
     }
 
-    private void initMapD() {
-        aMap.getUiSettings().setMyLocationButtonEnabled(true);// 设置默认定位按钮是否显示
-        aMap.setMyLocationEnabled(true);// 设置为true表示启动显示定位蓝点，false表示隐藏定位蓝点并不进行定位，默认是false。
+    private void initWork() {
+        RouteSearch routeSearch = new RouteSearch(this);
+        routeSearch.setRouteSearchListener(this);
+        RouteSearch.WalkRouteQuery query; query = new RouteSearch.WalkRouteQuery(fromAndTo, walkMode);
+        routeSearch.calculateWalkRouteAsyn(query);//开始算路
 
-        MyLocationStyle myLocationStyle = new MyLocationStyle();//初始化定位蓝点样式类myLocationStyle.myLocationType(MyLocationStyle.LOCATION_TYPE_LOCATION_ROTATE);//连续定位、且将视角移动到地图中心点，定位点依照设备方向旋转，并且会跟随设备移动。（1秒1次定位）如果不设置myLocationType，默认也会执行此种模式。
-        // 自定义定位蓝点图标
-        myLocationStyle.myLocationIcon(BitmapDescriptorFactory.
-                fromResource(R.mipmap.ic_launcher));
+    }
+
+    private void initView() {
+        et = findViewById(R.id.et);
+        btn = findViewById(R.id.btn);
+    }
+//蓝标
+    private void initMapD() {
+
+        MyLocationStyle myLocationStyle;
+        myLocationStyle = new MyLocationStyle();//初始化定位蓝点样式类myLocationStyle.myLocationType(MyLocationStyle.LOCATION_TYPE_LOCATION_ROTATE);//连续定位、且将视角移动到地图中心点，定位点依照设备方向旋转，并且会跟随设备移动。（1秒1次定位）如果不设置myLocationType，默认也会执行此种模式。
         myLocationStyle.interval(2000); //设置连续定位模式下的定位间隔，只在连续定位模式下生效，单次定位模式下不会生效。单位为毫秒。
         aMap.setMyLocationStyle(myLocationStyle);//设置定位蓝点的Style
 //aMap.getUiSettings().setMyLocationButtonEnabled(true);设置默认定位按钮是否显示，非必需设置。
-//        myLocationStyle.myLocationType(MyLocationStyle.LOCATION_TYPE_LOCATION_ROTATE_NO_CENTER);//连续定位、蓝点不会移动到地图中心点，定位点依照设备方向旋转，并且蓝点会跟随设备移动。
-        myLocationStyle.showMyLocation(true);
-        myLocationStyle.myLocationType(MyLocationStyle.LOCATION_TYPE_LOCATION_ROTATE_NO_CENTER);//连续定位、蓝点不会移动到地图中心点，定位点依照设备方向旋转，并且蓝点会跟随设备移动。
-        //连续定位、且将视角移动到地图中心点，定位蓝点跟随设备移动。（默认1秒1次定位）
+        aMap.setMyLocationEnabled(true);// 设置为true表示启动显示定位蓝点，false表示隐藏定位蓝点并不进行定位，默认是false。
 
-        myLocationStyle.interval(MyLocationStyle.LOCATION_TYPE_MAP_ROTATE);
-
-        myLocationStyle.anchor((float) 0.0,(float) 1.0);       //设置定位蓝点图标的锚点方法。
-        //MyLocationStyle strokeColor(int color);//设置定位蓝点精度圆圈的边框颜色的方法。
-        myLocationStyle.strokeColor(5);
-        //MyLocationStyle radiusFillColor(int color);//设置定位蓝点精度圆圈的填充颜色的方法。
-        myLocationStyle.radiusFillColor(5);
-        myLocationStyle.strokeWidth((float) 5.0);
-        aMap.setMyLocationStyle(myLocationStyle);
-
-        aMap.setMyLocationEnabled(true);
-
-        aMap.setOnMyLocationChangeListener(new AMap.OnMyLocationChangeListener() {
-            @Override
-            public void onMyLocationChange(Location location) {
-                Log.e("TAG", "onMyLocationChange: 实际的时间间隔  " + aMap.getMyLocationStyle().getInterval());
-
-            }
-        });
+        myLocationStyle.myLocationType(MyLocationStyle.LOCATION_TYPE_FOLLOW);//连续定位、且将视角移动到地图中心点，定位蓝点跟随设备移动。（1秒1次定位）
+//
     }
 
     @Override
@@ -103,7 +112,80 @@ public class MainActivity extends AppCompatActivity  {
         Log.e("TAG", "定位精度：" + location.getLatitude() + "--纬度：" + location.getLongitude());
 
     }
+//检索
+    @Override
+    public void onPoiSearched(PoiResult poiResult, int i) {
 
+        Log.e("TAG", "poi检索返回" + i);
+        ArrayList<PoiItem> pois = poiResult.getPois();
+        for (PoiItem item : pois) {
+            Log.e("TAG", "当前返回地址打印:" + item.getAdName());
+            Log.e("TAG", "当前返回地址打印:" + item.toString());
+
+        }
+        PoiOverlay poiOverlay = new PoiOverlay(aMap, pois);
+        poiOverlay.removeFromMap();
+        poiOverlay.addToMap();
+        poiOverlay.zoomToSpan();
+    }
+    @Override
+    public void onPoiItemSearched(PoiItem poiItem, int i) {
+    }
+
+
+    public void sreach(View view) {
+        string = et.getText().toString();
+        PoiSearch.Query query = new PoiSearch.Query(string, "", "北京");
+        //keyWord表示搜索字符串，
+        //第二个参数表示POI搜索类型，二者选填其一，选用POI搜索类型时建议填写类型代码，码表可以参考下方（而非文字）
+        //cityCode表示POI搜索区域，可以是城市编码也可以是城市名称，也可以传空字符串，空字符串代表全国在全国范围内进行搜索
+        query.setPageSize(10);// 设置每页最多返回多少条poiitem
+        query.setPageNum(currentPage);//设置查询页码
+        currentPage++;
+        PoiSearch poiSearch = new PoiSearch(MainActivity.this, query);
+        poiSearch.setOnPoiSearchListener(MainActivity.this);
+
+        poiSearch.searchPOIAsyn();
+    }
+
+    //步行导航
+
+    @Override
+    public void onBusRouteSearched(BusRouteResult busRouteResult, int i) {
+
+    }
+
+    @Override
+    public void onDriveRouteSearched(DriveRouteResult driveRouteResult, int i) {
+
+    }
+
+    @Override
+    public void onWalkRouteSearched(WalkRouteResult walkRouteResult, int i) {
+        Log.e("TAG", "路径返回" + i);
+//        for (PoiItem item : pois) {
+//            Log.e("TAG", "当前返回地址打印:" + item.getAdName());
+//            Log.e("TAG", "当前返回地址打印:" + item.toString());
+//
+//        }
+        List<WalkPath> paths = walkRouteResult.getPaths();
+
+        for(WalkPath path: paths){
+            Log.e("TAG", "路径长度:" + path.describeContents());
+            Log.e("TAG", "路径:" + path.toString());
+        }
+    }
+
+    @Override
+    public void onRideRouteSearched(RideRouteResult rideRouteResult, int i) {
+
+    }
+
+    /*************************************** 权限检查******************************************************/
+
+    /**
+     * 需要进行检测的权限数组
+     */
     protected String[] needPermissions = {
             Manifest.permission.ACCESS_COARSE_LOCATION,
             Manifest.permission.ACCESS_FINE_LOCATION,
@@ -122,7 +204,7 @@ public class MainActivity extends AppCompatActivity  {
 
     @Override
     protected void onResume() {
-        try {
+        try{
             super.onResume();
             mapView.onResume();
 
@@ -131,7 +213,7 @@ public class MainActivity extends AppCompatActivity  {
                     checkPermissions(needPermissions);
                 }
             }
-        } catch (Throwable e) {
+        }catch(Throwable e){
             e.printStackTrace();
         }
     }
@@ -142,7 +224,7 @@ public class MainActivity extends AppCompatActivity  {
      */
     @TargetApi(23)
     private void checkPermissions(String... permissions) {
-        try {
+        try{
             if (Build.VERSION.SDK_INT >= 23 && getApplicationInfo().targetSdkVersion >= 23) {
                 List<String> needRequestPermissonList = findDeniedPermissions(permissions);
                 if (null != needRequestPermissonList
@@ -157,7 +239,7 @@ public class MainActivity extends AppCompatActivity  {
                 }
             }
 
-        } catch (Throwable e) {
+        }catch(Throwable e){
             e.printStackTrace();
         }
     }
@@ -166,7 +248,6 @@ public class MainActivity extends AppCompatActivity  {
     private boolean needCheckBackLocation = false;
     //如果设置了target > 28，需要增加这个权限，否则不会弹出"始终允许"这个选择框
     private static String BACK_LOCATION_PERMISSION = "android.permission.ACCESS_BACKGROUND_LOCATION";
-
     /**
      * 获取权限集中需要申请权限的列表
      *
@@ -176,13 +257,13 @@ public class MainActivity extends AppCompatActivity  {
      */
     @TargetApi(23)
     private List<String> findDeniedPermissions(String[] permissions) {
-        try {
+        try{
             List<String> needRequestPermissonList = new ArrayList<String>();
             if (Build.VERSION.SDK_INT >= 23 && getApplicationInfo().targetSdkVersion >= 23) {
                 for (String perm : permissions) {
                     if (checkMySelfPermission(perm) != PackageManager.PERMISSION_GRANTED
                             || shouldShowMyRequestPermissionRationale(perm)) {
-                        if (!needCheckBackLocation
+                        if(!needCheckBackLocation
                                 && BACK_LOCATION_PERMISSION.equals(perm)) {
                             continue;
                         }
@@ -191,7 +272,7 @@ public class MainActivity extends AppCompatActivity  {
                 }
             }
             return needRequestPermissonList;
-        } catch (Throwable e) {
+        }catch(Throwable e){
             e.printStackTrace();
         }
         return null;
@@ -225,13 +306,13 @@ public class MainActivity extends AppCompatActivity  {
      * @since 2.5.0
      */
     private boolean verifyPermissions(int[] grantResults) {
-        try {
+        try{
             for (int result : grantResults) {
                 if (result != PackageManager.PERMISSION_GRANTED) {
                     return false;
                 }
             }
-        } catch (Throwable e) {
+        }catch(Throwable e){
             e.printStackTrace();
         }
         return true;
@@ -240,7 +321,7 @@ public class MainActivity extends AppCompatActivity  {
     @TargetApi(23)
     public void onRequestPermissionsResult(int requestCode,
                                            String[] permissions, int[] paramArrayOfInt) {
-        try {
+        try{
             if (Build.VERSION.SDK_INT >= 23) {
                 if (requestCode == PERMISSON_REQUESTCODE) {
                     if (!verifyPermissions(paramArrayOfInt)) {
@@ -249,7 +330,7 @@ public class MainActivity extends AppCompatActivity  {
                     }
                 }
             }
-        } catch (Throwable e) {
+        }catch(Throwable e){
             e.printStackTrace();
         }
     }
@@ -260,7 +341,7 @@ public class MainActivity extends AppCompatActivity  {
      * @since 2.5.0
      */
     private void showMissingPermissionDialog() {
-        try {
+        try{
             AlertDialog.Builder builder = new AlertDialog.Builder(this);
             builder.setTitle("提示");
             builder.setMessage("当前应用缺少必要权限。\\n\\n请点击\\\"设置\\\"-\\\"权限\\\"-打开所需权限");
@@ -270,7 +351,7 @@ public class MainActivity extends AppCompatActivity  {
                     new DialogInterface.OnClickListener() {
                         @Override
                         public void onClick(DialogInterface dialog, int which) {
-                            try {
+                            try{
                                 finish();
                             } catch (Throwable e) {
                                 e.printStackTrace();
@@ -293,7 +374,7 @@ public class MainActivity extends AppCompatActivity  {
             builder.setCancelable(false);
 
             builder.show();
-        } catch (Throwable e) {
+        }catch(Throwable e){
             e.printStackTrace();
         }
     }
@@ -304,7 +385,7 @@ public class MainActivity extends AppCompatActivity  {
      * @since 2.5.0
      */
     private void startAppSettings() {
-        try {
+        try{
             Intent intent = new Intent(
                     Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
             intent.setData(Uri.parse("package:" + getPackageName()));
@@ -313,5 +394,7 @@ public class MainActivity extends AppCompatActivity  {
             e.printStackTrace();
         }
     }
+
+
 
 }
