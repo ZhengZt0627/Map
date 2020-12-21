@@ -18,10 +18,16 @@ import android.widget.EditText;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.amap.api.location.AMapLocation;
+import com.amap.api.location.AMapLocationClient;
+import com.amap.api.location.AMapLocationClientOption;
+import com.amap.api.location.AMapLocationListener;
 import com.amap.api.maps.AMap;
+import com.amap.api.maps.LocationSource;
 import com.amap.api.maps.MapView;
-
 import com.amap.api.maps.model.MyLocationStyle;
+import com.amap.api.services.core.AMapException;
+import com.amap.api.services.core.LatLonPoint;
 import com.amap.api.services.core.PoiItem;
 import com.amap.api.services.poisearch.PoiResult;
 import com.amap.api.services.poisearch.PoiSearch;
@@ -36,16 +42,20 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 
-public class MainActivity extends AppCompatActivity implements PoiSearch.OnPoiSearchListener, RouteSearch.OnRouteSearchListener {
+public class MainActivity extends AppCompatActivity implements LocationSource, PoiSearch.OnPoiSearchListener, RouteSearch.OnRouteSearchListener, AMapLocationListener {
     private AMap aMap;
     private EditText et;
     private Button btn;
     private String string;
     private int currentPage = 0;
     private MapView mapView;
-    private RouteSearch.FromAndTo fromAndTo;
-    private int  walkMode;
-
+    private WalkRouteResult mWalkRouteResult;
+    private static final int ROUTE_TYPE_WALK = 3;
+    private LatLonPoint mStartPoint = new LatLonPoint(39.942295, 116.335891);//起点，116.335891,39.942295
+    private LatLonPoint mEndPoint = new LatLonPoint(39.995576, 116.481288);//终点，116.481288,39.995576
+    private OnLocationChangedListener mListener;
+    private Button btnWalk;
+    private RouteSearch routeSearch;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -56,22 +66,34 @@ public class MainActivity extends AppCompatActivity implements PoiSearch.OnPoiSe
         aMap = mapView.getMap();
         initMapD();
         initView();
-        initWork();
     }
 
-    private void initWork() {
-        RouteSearch routeSearch = new RouteSearch(this);
-        routeSearch.setRouteSearchListener(this);
-        RouteSearch.WalkRouteQuery query; query = new RouteSearch.WalkRouteQuery(fromAndTo, walkMode);
-        routeSearch.calculateWalkRouteAsyn(query);//开始算路
-
-    }
 
     private void initView() {
         et = findViewById(R.id.et);
         btn = findViewById(R.id.btn);
+        btnWalk = findViewById(R.id.btn_walk);
+        btnWalk.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                searchRouteResult(ROUTE_TYPE_WALK,0);
+            }
+        });
     }
-//蓝标
+
+    private void searchRouteResult(int routeType, int mode) {
+        routeSearch = new RouteSearch(this);
+        routeSearch.setRouteSearchListener(this);
+        final RouteSearch.FromAndTo fromAndTo = new RouteSearch.FromAndTo(
+                mStartPoint, mEndPoint);
+        if (routeType == ROUTE_TYPE_WALK) {// 步行路径规划
+            //初始化query对象，fromAndTo是包含起终点信息，walkMode是步行路径规划的模式
+            RouteSearch.WalkRouteQuery query = new RouteSearch.WalkRouteQuery(fromAndTo, mode);
+            routeSearch.calculateWalkRouteAsyn(query);// 异步路径规划步行模式查询
+        }
+    }
+
+    //蓝标
     private void initMapD() {
 
         MyLocationStyle myLocationStyle;
@@ -112,7 +134,8 @@ public class MainActivity extends AppCompatActivity implements PoiSearch.OnPoiSe
         Log.e("TAG", "定位精度：" + location.getLatitude() + "--纬度：" + location.getLongitude());
 
     }
-//检索
+
+    //检索
     @Override
     public void onPoiSearched(PoiResult poiResult, int i) {
 
@@ -128,6 +151,7 @@ public class MainActivity extends AppCompatActivity implements PoiSearch.OnPoiSe
         poiOverlay.addToMap();
         poiOverlay.zoomToSpan();
     }
+
     @Override
     public void onPoiItemSearched(PoiItem poiItem, int i) {
     }
@@ -161,18 +185,32 @@ public class MainActivity extends AppCompatActivity implements PoiSearch.OnPoiSe
     }
 
     @Override
-    public void onWalkRouteSearched(WalkRouteResult walkRouteResult, int i) {
-        Log.e("TAG", "路径返回" + i);
-//        for (PoiItem item : pois) {
-//            Log.e("TAG", "当前返回地址打印:" + item.getAdName());
-//            Log.e("TAG", "当前返回地址打印:" + item.toString());
-//
-//        }
-        List<WalkPath> paths = walkRouteResult.getPaths();
+    public void onWalkRouteSearched(WalkRouteResult result, int errorCode) {
+        aMap.clear();// 清理地图上的所有覆盖物
+        if (errorCode == AMapException.CODE_AMAP_SUCCESS) {
+            if (result != null && result.getPaths() != null) {
+                if (result.getPaths().size() > 0) {
+                    mWalkRouteResult = result;
+                    final WalkPath walkPath = mWalkRouteResult.getPaths()
+                            .get(0);
+                    if (walkPath == null) {
+                        return;
+                    }
+                    WalkRouteOverlay walkRouteOverlay = new WalkRouteOverlay(
+                            this, aMap, walkPath,
+                            mWalkRouteResult.getStartPos(),
+                            mWalkRouteResult.getTargetPos());
+                    walkRouteOverlay.removeFromMap();
+                    walkRouteOverlay.addToMap();
+                    walkRouteOverlay.zoomToSpan();
 
-        for(WalkPath path: paths){
-            Log.e("TAG", "路径长度:" + path.describeContents());
-            Log.e("TAG", "路径:" + path.toString());
+                    int dis = (int) walkPath.getDistance();
+                    int dur = (int) walkPath.getDuration();
+                    String des = AMapUtil.getFriendlyTime(dur) + "(" + AMapUtil.getFriendlyLength(dis) + ")";
+
+                }
+            }
+
         }
     }
 
@@ -180,6 +218,56 @@ public class MainActivity extends AppCompatActivity implements PoiSearch.OnPoiSe
     public void onRideRouteSearched(RideRouteResult rideRouteResult, int i) {
 
     }
+
+    //路径
+    AMapLocationClient mlocationClient;
+    AMapLocationClientOption mLocationOption;
+
+    @Override
+    public void activate(OnLocationChangedListener listener) {
+        mListener = listener;
+        if (mlocationClient == null) {
+            //初始化定位
+            mlocationClient = new AMapLocationClient(this);
+            //初始化定位参数
+            mLocationOption = new AMapLocationClientOption();
+            //设置定位回调监听
+            mlocationClient.setLocationListener(MainActivity.this);
+            //设置为高精度定位模式
+            mLocationOption.setLocationMode(AMapLocationClientOption.AMapLocationMode.Hight_Accuracy);
+            //设置定位参数
+            mlocationClient.setLocationOption(mLocationOption);
+            // 此方法为每隔固定时间会发起一次定位请求，为了减少电量消耗或网络流量消耗，
+            // 注意设置合适的定位时间的间隔（最小间隔支持为2000ms），并且在合适时间调用stopLocation()方法来取消定位请求
+            // 在定位结束后，在合适的生命周期调用onDestroy()方法
+            // 在单次定位情况下，定位无论成功与否，都无需调用stopLocation()方法移除请求，定位sdk内部会移除
+            mlocationClient.startLocation();//启动定位
+        }
+    }
+
+    @Override
+    public void deactivate() {
+        mListener = null;
+        if (mlocationClient != null) {
+            mlocationClient.stopLocation();
+            mlocationClient.onDestroy();
+        }
+        mlocationClient = null;
+    }
+
+    @Override
+    public void onLocationChanged(AMapLocation aMapLocation) {
+        if (mListener != null && aMapLocation != null) {
+            if (aMapLocation != null
+                    && aMapLocation.getErrorCode() == 0) {
+                mListener.onLocationChanged(aMapLocation);// 显示系统小蓝点
+            } else {
+                String errText = "定位失败," + aMapLocation.getErrorCode() + ": " + aMapLocation.getErrorInfo();
+                Log.e("AmapErr", errText);
+            }
+        }
+    }
+
 
     /*************************************** 权限检查******************************************************/
 
@@ -204,7 +292,7 @@ public class MainActivity extends AppCompatActivity implements PoiSearch.OnPoiSe
 
     @Override
     protected void onResume() {
-        try{
+        try {
             super.onResume();
             mapView.onResume();
 
@@ -213,7 +301,7 @@ public class MainActivity extends AppCompatActivity implements PoiSearch.OnPoiSe
                     checkPermissions(needPermissions);
                 }
             }
-        }catch(Throwable e){
+        } catch (Throwable e) {
             e.printStackTrace();
         }
     }
@@ -224,7 +312,7 @@ public class MainActivity extends AppCompatActivity implements PoiSearch.OnPoiSe
      */
     @TargetApi(23)
     private void checkPermissions(String... permissions) {
-        try{
+        try {
             if (Build.VERSION.SDK_INT >= 23 && getApplicationInfo().targetSdkVersion >= 23) {
                 List<String> needRequestPermissonList = findDeniedPermissions(permissions);
                 if (null != needRequestPermissonList
@@ -239,7 +327,7 @@ public class MainActivity extends AppCompatActivity implements PoiSearch.OnPoiSe
                 }
             }
 
-        }catch(Throwable e){
+        } catch (Throwable e) {
             e.printStackTrace();
         }
     }
@@ -248,6 +336,7 @@ public class MainActivity extends AppCompatActivity implements PoiSearch.OnPoiSe
     private boolean needCheckBackLocation = false;
     //如果设置了target > 28，需要增加这个权限，否则不会弹出"始终允许"这个选择框
     private static String BACK_LOCATION_PERMISSION = "android.permission.ACCESS_BACKGROUND_LOCATION";
+
     /**
      * 获取权限集中需要申请权限的列表
      *
@@ -257,13 +346,13 @@ public class MainActivity extends AppCompatActivity implements PoiSearch.OnPoiSe
      */
     @TargetApi(23)
     private List<String> findDeniedPermissions(String[] permissions) {
-        try{
+        try {
             List<String> needRequestPermissonList = new ArrayList<String>();
             if (Build.VERSION.SDK_INT >= 23 && getApplicationInfo().targetSdkVersion >= 23) {
                 for (String perm : permissions) {
                     if (checkMySelfPermission(perm) != PackageManager.PERMISSION_GRANTED
                             || shouldShowMyRequestPermissionRationale(perm)) {
-                        if(!needCheckBackLocation
+                        if (!needCheckBackLocation
                                 && BACK_LOCATION_PERMISSION.equals(perm)) {
                             continue;
                         }
@@ -272,7 +361,7 @@ public class MainActivity extends AppCompatActivity implements PoiSearch.OnPoiSe
                 }
             }
             return needRequestPermissonList;
-        }catch(Throwable e){
+        } catch (Throwable e) {
             e.printStackTrace();
         }
         return null;
@@ -306,13 +395,13 @@ public class MainActivity extends AppCompatActivity implements PoiSearch.OnPoiSe
      * @since 2.5.0
      */
     private boolean verifyPermissions(int[] grantResults) {
-        try{
+        try {
             for (int result : grantResults) {
                 if (result != PackageManager.PERMISSION_GRANTED) {
                     return false;
                 }
             }
-        }catch(Throwable e){
+        } catch (Throwable e) {
             e.printStackTrace();
         }
         return true;
@@ -321,7 +410,7 @@ public class MainActivity extends AppCompatActivity implements PoiSearch.OnPoiSe
     @TargetApi(23)
     public void onRequestPermissionsResult(int requestCode,
                                            String[] permissions, int[] paramArrayOfInt) {
-        try{
+        try {
             if (Build.VERSION.SDK_INT >= 23) {
                 if (requestCode == PERMISSON_REQUESTCODE) {
                     if (!verifyPermissions(paramArrayOfInt)) {
@@ -330,7 +419,7 @@ public class MainActivity extends AppCompatActivity implements PoiSearch.OnPoiSe
                     }
                 }
             }
-        }catch(Throwable e){
+        } catch (Throwable e) {
             e.printStackTrace();
         }
     }
@@ -341,7 +430,7 @@ public class MainActivity extends AppCompatActivity implements PoiSearch.OnPoiSe
      * @since 2.5.0
      */
     private void showMissingPermissionDialog() {
-        try{
+        try {
             AlertDialog.Builder builder = new AlertDialog.Builder(this);
             builder.setTitle("提示");
             builder.setMessage("当前应用缺少必要权限。\\n\\n请点击\\\"设置\\\"-\\\"权限\\\"-打开所需权限");
@@ -351,7 +440,7 @@ public class MainActivity extends AppCompatActivity implements PoiSearch.OnPoiSe
                     new DialogInterface.OnClickListener() {
                         @Override
                         public void onClick(DialogInterface dialog, int which) {
-                            try{
+                            try {
                                 finish();
                             } catch (Throwable e) {
                                 e.printStackTrace();
@@ -374,7 +463,7 @@ public class MainActivity extends AppCompatActivity implements PoiSearch.OnPoiSe
             builder.setCancelable(false);
 
             builder.show();
-        }catch(Throwable e){
+        } catch (Throwable e) {
             e.printStackTrace();
         }
     }
@@ -385,7 +474,7 @@ public class MainActivity extends AppCompatActivity implements PoiSearch.OnPoiSe
      * @since 2.5.0
      */
     private void startAppSettings() {
-        try{
+        try {
             Intent intent = new Intent(
                     Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
             intent.setData(Uri.parse("package:" + getPackageName()));
@@ -394,7 +483,5 @@ public class MainActivity extends AppCompatActivity implements PoiSearch.OnPoiSe
             e.printStackTrace();
         }
     }
-
-
 
 }
